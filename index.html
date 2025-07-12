@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경사하강법 시뮬레이션</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .control-group {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        select, input, button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+        button {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            height: 400px;
+        }
+        .info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #ffd700;
+        }
+        .info-box p {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .charts {
+                grid-template-columns: 1fr;
+            }
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 경사하강법 시뮬레이션</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="functionSelect">함수 선택:</label>
+                <select id="functionSelect">
+                    <option value="quadratic">이차함수: x²</option>
+                    <option value="sin">사인함수: sin(x)</option>
+                    <option value="cos">코사인함수: cos(x)</option>
+                    <option value="exp">지수함수: e^x</option>
+                    <option value="log">로그함수: ln(x)</option>
+                    <option value="complex">복합함수: x²·sin(x)</option>
+                    <option value="beale">Beale 함수 (2D)</option>
+                    <option value="custom">사용자 정의 함수</option>
+                </select>
+            </div>
+            
+            <div class="control-group" id="customFunctionGroup" style="display: none;">
+                <label for="customFunction">함수 입력 (x 변수 사용):</label>
+                <input type="text" id="customFunction" placeholder="예: x^2 + 2*x + 1">
+                <small style="color: #ffd700; font-size: 12px; margin-top: 5px; display: block;">
+                    사용 가능: +, -, *, /, ^, sin, cos, tan, exp, log, sqrt, abs, pow
+                </small>
+            </div>
+            
+            <div class="control-group">
+                <label for="learningRate">학습률:</label>
+                <input type="range" id="learningRate" min="0.001" max="0.1" step="0.001" value="0.01">
+                <span id="lrValue">0.01</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="startX">시작점 X:</label>
+                <input type="number" id="startX" value="2" step="0.1">
+            </div>
+            
+            <div class="control-group">
+                <label for="startY">시작점 Y (2D일 때):</label>
+                <input type="number" id="startY" value="2" step="0.1">
+            </div>
+            
+            <div class="control-group">
+                <label for="iterations">최대 반복 횟수:</label>
+                <input type="number" id="iterations" value="50" min="1" max="200">
+            </div>
+            
+            <div class="control-group">
+                <label for="tolerance">수렴 허용 오차:</label>
+                <input type="range" id="tolerance" min="0.0001" max="0.01" step="0.0001" value="0.001">
+                <span id="tolValue">0.001</span>
+            </div>
+            
+            <div class="control-group">
+                <button onclick="runGradientDescent()">🚀 경사하강법 실행</button>
+                <button onclick="resetSimulation()">🔄 초기화</button>
+            </div>
+        </div>
+        
+        <div class="info">
+            <div class="info-box">
+                <h3>현재 위치</h3>
+                <p id="currentPos">-</p>
+            </div>
+            <div class="info-box">
+                <h3>현재 함수값</h3>
+                <p id="currentValue">-</p>
+            </div>
+            <div class="info-box">
+                <h3>반복 횟수</h3>
+                <p id="iterationCount">0</p>
+            </div>
+            <div class="info-box">
+                <h3>기울기</h3>
+                <p id="currentGradient">-</p>
+            </div>
+            <div class="info-box">
+                <h3>수렴 상태</h3>
+                <p id="convergenceStatus">대기중</p>
+            </div>
+        </div>
+        
+        <div class="charts">
+            <div class="chart-container">
+                <canvas id="functionChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="lossChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let functionChart, lossChart;
+        let currentX = 2, currentY = 2;
+        let iteration = 0;
+        let lossHistory = [];
+        let pathHistory = [];
+        
+        // 함수 정의
+        const functions = {
+            quadratic: {
+                f: (x) => x * x,
+                df: (x) => 2 * x,
+                range: [-5, 5],
+                name: 'x²'
+            },
+            sin: {
+                f: (x) => Math.sin(x),
+                df: (x) => Math.cos(x),
+                range: [-6, 6],
+                name: 'sin(x)'
+            },
+            cos: {
+                f: (x) => Math.cos(x),
+                df: (x) => -Math.sin(x),
+                range: [-6, 6],
+                name: 'cos(x)'
+            },
+            exp: {
+                f: (x) => Math.exp(x),
+                df: (x) => Math.exp(x),
+                range: [-2, 2],
+                name: 'e^x'
+            },
+            log: {
+                f: (x) => x > 0 ? Math.log(x) : NaN,
+                df: (x) => x > 0 ? 1/x : NaN,
+                range: [0.1, 5],
+                name: 'ln(x)'
+            },
+            complex: {
+                f: (x) => x * x * Math.sin(x),
+                df: (x) => 2 * x * Math.sin(x) + x * x * Math.cos(x),
+                range: [-5, 5],
+                name: 'x²·sin(x)'
+            },
+            beale: {
+                f: (x, y) => Math.pow(1.5 - x + x*y, 2) + Math.pow(2.25 - x + x*y*y, 2) + Math.pow(2.625 - x + x*y*y*y, 2),
+                df: (x, y) => {
+                    const dx = 2*(1.5 - x + x*y)*(-1 + y) + 2*(2.25 - x + x*y*y)*(-1 + y*y) + 2*(2.625 - x + x*y*y*y)*(-1 + y*y*y);
+                    const dy = 2*(1.5 - x + x*y)*x + 2*(2.25 - x + x*y*y)*x*2*y + 2*(2.625 - x + x*y*y*y)*x*3*y*y;
+                    return [dx, dy];
+                },
+                range: [[-4, 4], [-4, 4]],
+                name: 'Beale Function',
+                is2D: true
+            },
+            custom: {
+                f: null,
+                df: null,
+                range: [-5, 5],
+                name: 'Custom Function'
+            }
+        };
+        
+        // 수식 파싱 함수
+        function parseExpression(expr) {
+            // 수식을 JavaScript 코드로 변환
+            let jsExpr = expr
+                .replace(/\^/g, '**')
+                .replace(/sin/g, 'Math.sin')
+                .replace(/cos/g, 'Math.cos')
+                .replace(/tan/g, 'Math.tan')
+                .replace(/exp/g, 'Math.exp')
+                .replace(/log/g, 'Math.log')
+                .replace(/sqrt/g, 'Math.sqrt')
+                .replace(/abs/g, 'Math.abs')
+                .replace(/pow/g, 'Math.pow')
+                .replace(/pi/g, 'Math.PI')
+                .replace(/e/g, 'Math.E');
+            
+            return jsExpr;
+        }
+        
+        // 수치 미분 함수
+        function numericalDerivative(func, x, h = 1e-5) {
+            try {
+                return (func(x + h) - func(x - h)) / (2 * h);
+            } catch (e) {
+                return 0;
+            }
+        }
+        
+        // 사용자 정의 함수 생성
+        function createCustomFunction(expression) {
+            try {
+                const jsExpr = parseExpression(expression);
+                const func = new Function('x', `return ${jsExpr}`);
+                
+                // 함수 테스트
+                const testResult = func(1);
+                if (isNaN(testResult) || !isFinite(testResult)) {
+                    throw new Error('Invalid function');
+                }
+                
+                return {
+                    f: func,
+                    df: (x) => numericalDerivative(func, x),
+                    range: [-5, 5],
+                    name: expression
+                };
+            } catch (e) {
+                alert('함수 파싱 오류: ' + e.message + '\n올바른 수식을 입력해주세요.');
+                return null;
+            }
+        }
+        
+        // 학습률 슬라이더 업데이트
+        document.getElementById('learningRate').addEventListener('input', function() {
+            document.getElementById('lrValue').textContent = this.value;
+        });
+        
+        // 허용 오차 슬라이더 업데이트
+        document.getElementById('tolerance').addEventListener('input', function() {
+            document.getElementById('tolValue').textContent = this.value;
+        });
+        
+        // 초기 차트 설정
+        function initCharts() {
+            const ctx1 = document.getElementById('functionChart').getContext('2d');
+            const ctx2 = document.getElementById('lossChart').getContext('2d');
+            
+            functionChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '함수',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderWidth: 2,
+                        fill: true
+                    }, {
+                        label: '현재 위치',
+                        data: [],
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgb(255, 99, 132)',
+                        pointRadius: 8,
+                        pointHoverRadius: 10,
+                        showLine: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                modifierKey: 'ctrl',
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'xy',
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(75,192,192,0.1)'
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '함수 그래프 (마우스 휠로 확대/축소, Ctrl+드래그로 이동)',
+                            font: {
+                                size: 16
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'x'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'f(x)'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            lossChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '함수값',
+                        data: [],
+                        borderColor: 'rgb(255, 159, 64)',
+                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                modifierKey: 'ctrl',
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                },
+                                pinch: {
+                                    enabled: true
+                                },
+                                mode: 'xy',
+                                drag: {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(255,159,64,0.1)'
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '함수값 변화 (마우스 휠로 확대/축소, Ctrl+드래그로 이동)',
+                            font: {
+                                size: 16
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '반복 횟수'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '함수값'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 함수 그래프 업데이트
+        function updateFunctionChart() {
+            const funcType = document.getElementById('functionSelect').value;
+            let func = functions[funcType];
+            
+            // 사용자 정의 함수 처리
+            if (funcType === 'custom') {
+                const customExpr = document.getElementById('customFunction').value.trim();
+                if (!customExpr) return;
+                func = createCustomFunction(customExpr);
+                if (!func) return;
+            }
+            
+            if (func.is2D) {
+                // 2D 함수는 간단히 현재 위치만 표시
+                functionChart.data.labels = ['현재 위치'];
+                functionChart.data.datasets[0].data = [];
+                functionChart.data.datasets[1].data = [{x: currentX, y: currentY}];
+            } else {
+                const range = func.range;
+                const points = [];
+                const labels = [];
+                
+                for (let x = range[0]; x <= range[1]; x += (range[1] - range[0]) / 100) {
+                    try {
+                        const y = func.f(x);
+                        if (isFinite(y) && !isNaN(y)) {
+                            points.push({x: x, y: y});
+                            labels.push(x.toFixed(2));
+                        }
+                    } catch (e) {
+                        // 함수 계산 오류 무시
+                    }
+                }
+                
+                functionChart.data.labels = labels;
+                functionChart.data.datasets[0].data = points;
+                
+                try {
+                    const currentY = func.f(currentX);
+                    if (isFinite(currentY) && !isNaN(currentY)) {
+                        functionChart.data.datasets[1].data = [{x: currentX, y: currentY}];
+                    }
+                } catch (e) {
+                    functionChart.data.datasets[1].data = [];
+                }
+            }
+            
+            functionChart.update('none');
+        }
+        
+        // 손실 차트 업데이트
+        function updateLossChart() {
+            lossChart.data.labels = Array.from({length: lossHistory.length}, (_, i) => i);
+            lossChart.data.datasets[0].data = lossHistory;
+            lossChart.update('none');
+        }
+        
+        // 정보 업데이트
+        function updateInfo() {
+            const funcType = document.getElementById('functionSelect').value;
+            let func = functions[funcType];
+            
+            // 사용자 정의 함수 처리
+            if (funcType === 'custom') {
+                const customExpr = document.getElementById('customFunction').value.trim();
+                if (!customExpr) return;
+                func = createCustomFunction(customExpr);
+                if (!func) return;
+            }
+            
+            if (func.is2D) {
+                document.getElementById('currentPos').textContent = `(${currentX.toFixed(4)}, ${currentY.toFixed(4)})`;
+                document.getElementById('currentValue').textContent = func.f(currentX, currentY).toFixed(4);
+                const grad = func.df(currentX, currentY);
+                document.getElementById('currentGradient').textContent = `(${grad[0].toFixed(4)}, ${grad[1].toFixed(4)})`;
+            } else {
+                document.getElementById('currentPos').textContent = currentX.toFixed(4);
+                try {
+                    document.getElementById('currentValue').textContent = func.f(currentX).toFixed(4);
+                    document.getElementById('currentGradient').textContent = func.df(currentX).toFixed(4);
+                } catch (e) {
+                    document.getElementById('currentValue').textContent = 'Error';
+                    document.getElementById('currentGradient').textContent = 'Error';
+                }
+            }
+            
+            document.getElementById('iterationCount').textContent = iteration;
+        }
+        
+        // 경사하강법 실행
+        function runGradientDescent() {
+            const funcType = document.getElementById('functionSelect').value;
+            let func = functions[funcType];
+            
+            // 사용자 정의 함수 처리
+            if (funcType === 'custom') {
+                const customExpr = document.getElementById('customFunction').value.trim();
+                if (!customExpr) {
+                    alert('사용자 정의 함수를 입력해주세요.');
+                    return;
+                }
+                func = createCustomFunction(customExpr);
+                if (!func) return;
+            }
+            
+            const lr = parseFloat(document.getElementById('learningRate').value);
+            const maxIter = Math.min(1000, parseInt(document.getElementById('iterations').value));
+            const tolerance = parseFloat(document.getElementById('tolerance').value);
+            const divergenceThreshold = 1e10;  // 발산 판단 임계값
+            
+            currentX = parseFloat(document.getElementById('startX').value);
+            currentY = parseFloat(document.getElementById('startY').value);
+            iteration = 0;
+            lossHistory = [];
+            pathHistory = [];
+            
+            // 이전 위치 및 함수값 저장 변수
+            let prevX = currentX;
+            let prevY = currentY;
+            let prevFunctionValue = func.is2D ? func.f(currentX, currentY) : func.f(currentX);
+            
+            document.getElementById('convergenceStatus').textContent = '진행중...';
+            document.getElementById('convergenceStatus').style.color = '#ffa500';
+            
+            const animate = () => {
+                if (iteration < maxIter) {
+                    let currentFunctionValue;
+                    let gradientMagnitude = 0;
+                    
+                    try {
+                        if (func.is2D) {
+                            const grad = func.df(currentX, currentY);
+                            gradientMagnitude = Math.sqrt(grad[0] * grad[0] + grad[1] * grad[1]);
+                            
+                            currentX = currentX - lr * grad[0];
+                            currentY = currentY - lr * grad[1];
+                            currentFunctionValue = func.f(currentX, currentY);
+                        } else {
+                            const grad = func.df(currentX);
+                            gradientMagnitude = Math.abs(grad);
+                            
+                            currentX = currentX - lr * grad;
+                            currentFunctionValue = func.f(currentX);
+                        }
+
+                        // 발산 체크
+                        if (!isFinite(currentFunctionValue) || Math.abs(currentFunctionValue) > divergenceThreshold) {
+                            document.getElementById('convergenceStatus').textContent = '발산 발생!';
+                            document.getElementById('convergenceStatus').style.color = '#ff0000';
+                            console.log('경사하강법이 발산했습니다.');
+                            return;
+                        }
+
+                        lossHistory.push(currentFunctionValue);
+                        
+                        // 수렴 조건 확인
+                        const positionChange = func.is2D ? 
+                            Math.sqrt(Math.pow(currentX - prevX, 2) + Math.pow(currentY - prevY, 2)) :
+                            Math.abs(currentX - prevX);
+                        const functionChange = Math.abs(currentFunctionValue - prevFunctionValue);
+                        
+                        // 수렴 조건: 기울기가 허용 오차 이하이거나, 위치 변화가 매우 작거나, 함수값 변화가 매우 작음
+                        if (gradientMagnitude < tolerance || positionChange < tolerance || functionChange < tolerance * 0.01) {
+                            document.getElementById('convergenceStatus').textContent = '수렴 완료!';
+                            document.getElementById('convergenceStatus').style.color = '#00ff00';
+                            console.log(`경사하강법 수렴 완료! (반복 횟수: ${iteration + 1})`);
+                            console.log(`최종 기울기 크기: ${gradientMagnitude.toFixed(6)}`);
+                            console.log(`위치 변화: ${positionChange.toFixed(6)}`);
+                            console.log(`함수값 변화: ${functionChange.toFixed(6)}`);
+                            
+                            // 최종 업데이트
+                            iteration++;
+                            updateInfo();
+                            updateFunctionChart();
+                            updateLossChart();
+                            return;
+                        }
+                        
+                        // 이전 값 업데이트
+                        prevX = currentX;
+                        prevY = currentY;
+                        prevFunctionValue = currentFunctionValue;
+                        
+                        iteration++;
+                        updateInfo();
+                        updateFunctionChart();
+                        updateLossChart();
+                        
+                        setTimeout(animate, 100);
+                    } catch (e) {
+                        document.getElementById('convergenceStatus').textContent = '계산 오류 발생!';
+                        document.getElementById('convergenceStatus').style.color = '#ff0000';
+                        console.error('계산 중 오류:', e);
+                        return;
+                    }
+                } else {
+                    document.getElementById('convergenceStatus').textContent = '최대 반복(1000회) 도달';
+                    document.getElementById('convergenceStatus').style.color = '#ff6b6b';
+                    console.log('최대 반복 횟수(1000회)에 도달했습니다.');
+                }
+            };
+            
+            animate();
+        }
+        
+        // 시뮬레이션 초기화
+        function resetSimulation() {
+            currentX = parseFloat(document.getElementById('startX').value);
+            currentY = parseFloat(document.getElementById('startY').value);
+            iteration = 0;
+            lossHistory = [];
+            pathHistory = [];
+            
+            document.getElementById('convergenceStatus').textContent = '대기중';
+            document.getElementById('convergenceStatus').style.color = '#ffffff';
+            
+            // 차트 줌 리셋
+            functionChart.resetZoom();
+            lossChart.resetZoom();
+            
+            updateInfo();
+            updateFunctionChart();
+            updateLossChart();
+        }
+        
+        // 함수 선택 변경 시
+        document.getElementById('functionSelect').addEventListener('change', function() {
+            const customGroup = document.getElementById('customFunctionGroup');
+            if (this.value === 'custom') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+            }
+            resetSimulation();
+        });
+        
+        // 사용자 정의 함수 입력 시
+        document.getElementById('customFunction').addEventListener('input', function() {
+            if (document.getElementById('functionSelect').value === 'custom') {
+                resetSimulation();
+            }
+        });
+        
+        // 초기화
+        window.addEventListener('load', function() {
+            initCharts();
+            updateInfo();
+            updateFunctionChart();
+            updateLossChart();
+        });
+    </script>
+</body>
+</html>
